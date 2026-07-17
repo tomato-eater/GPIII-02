@@ -1189,12 +1189,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f3cce2a51e25ca445b1ca2798fcc3b28, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Player
+  hp: 2
+  invincibleTimeMax: 0.75
+  knockBackPower: 5
   moveSpeed: 10
   roteSpeed: 1.12
-  jumpSpeed: 5
+  jumpSpeed: 7
   gNormal: 0.7
   gDamping: 5
   airDamping: 5
+  pre_Fire: {fileID: 4818970324401746577, guid: 59c516dceb031b64ba6cb9cd59bb41f0, type: 3}
+  fireOffset: {x: 0, y: 0.8, z: 0.2}
+  fireSpeed: 7
   stepDis: 0.3
   stepWidth: 0.13
   stepHeight: 0.2
@@ -21448,7 +21454,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1327674205686831306, guid: 83628a2e699576147adabb30587f44d4, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -13
+      value: -13.08
       objectReference: {fileID: 0}
     - target: {fileID: 1327674205686831306, guid: 83628a2e699576147adabb30587f44d4, type: 3}
       propertyPath: m_LocalPosition.z
@@ -27833,7 +27839,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4079214006213137236, guid: f1f3ed65dcea7914ea66dae63a4c744e, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 8
+      value: 7.29
       objectReference: {fileID: 0}
     - target: {fileID: 4079214006213137236, guid: f1f3ed65dcea7914ea66dae63a4c744e, type: 3}
       propertyPath: m_LocalPosition.y
@@ -27841,7 +27847,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4079214006213137236, guid: f1f3ed65dcea7914ea66dae63a4c744e, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 6.17
+      value: 6.89
       objectReference: {fileID: 0}
     - target: {fileID: 4079214006213137236, guid: f1f3ed65dcea7914ea66dae63a4c744e, type: 3}
       propertyPath: m_LocalRotation.w

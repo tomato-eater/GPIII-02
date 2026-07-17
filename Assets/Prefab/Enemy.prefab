@@ -12,9 +12,10 @@ GameObject:
   - component: {fileID: 5002764401974633901}
   - component: {fileID: 2178754706516832985}
   - component: {fileID: 746236342811256938}
+  - component: {fileID: 5333475253313043690}
   m_Layer: 0
   m_Name: Enemy
-  m_TagString: Untagged
+  m_TagString: Enemy
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -47,6 +48,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0ae5cc6019cdd49488e2d9e71d7e7abc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Enemy
+  moveSpeed: 0
+  roteSpeed: 0
+  hp: 2
+  invincibleTimeMax: 0.5
+  knockBackPower: 5
 --- !u!135 &2178754706516832985
 SphereCollider:
   m_ObjectHideFlags: 0
@@ -95,6 +101,19 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 0
+--- !u!114 &5333475253313043690
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2382780987904092759}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7b0a041c08058b544a30da88bb032e7c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AttackObj
+  power: 1
 --- !u!1001 &8409531456331130934
 PrefabInstance:
   m_ObjectHideFlags: 0

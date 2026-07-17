@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -7,6 +9,10 @@ public class Player : MonoBehaviour
     PlayerInput input;
     Rigidbody rb;
     Animator anim;
+    [SerializeField] int hp;
+    [SerializeField] float invincibleTimeMax = 0.5f;
+    float invincibleTime;
+    [SerializeField] float knockBackPower = 5;
 
     [SerializeField] float moveSpeed;
     [SerializeField] float roteSpeed;
@@ -14,6 +20,10 @@ public class Player : MonoBehaviour
     [SerializeField] float gNormal;
     [SerializeField] float gDamping;
     [SerializeField] float airDamping;
+    [SerializeField] GameObject pre_Fire;
+    List<GameObject> fire = new List<GameObject>();
+    [SerializeField] Vector3 fireOffset;
+    [SerializeField] float fireSpeed;
 
     [Header("段差")]
     [SerializeField] float stepDis;
@@ -33,7 +43,13 @@ public class Player : MonoBehaviour
         rb = GetComponent<Rigidbody>();
         anim = GetComponentInChildren<Animator>();
 
-        isGravity = true;
+        isGravity = !true;
+
+        for(int i=0; i < 5; i++)
+        {
+            fire.Add(Instantiate(pre_Fire));
+            fire.Last().SetActive(false);
+        }
     }
 
     // Update is called once per frame
@@ -43,7 +59,8 @@ public class Player : MonoBehaviour
         var camF = Vector3.Scale(input.camera.transform.forward, new Vector3(1, 0, 1)).normalized;
         var movF = camF * moveVec.y + input.camera.transform.right * moveVec.x;
 
-        rb.AddForce(movF * moveSpeed, ForceMode.Acceleration);
+        if (isGlounded)
+            rb.AddForce(movF * moveSpeed, ForceMode.Acceleration);
         
         if(moveVec != Vector2.zero)
         {
@@ -54,35 +71,33 @@ public class Player : MonoBehaviour
                 360 * roteSpeed * Time.deltaTime);
 
             //段差
-            var sideDir = Vector3.Cross(Vector3.up, movF).normalized;
+            {
+                var sideDir = Vector3.Cross(Vector3.up, movF).normalized;
 
-            Vector3[] offsets = new Vector3[]
-            {
-                -sideDir * stepWidth,
-                Vector3.zero,
-                -sideDir * -stepWidth
-            };
-            foreach(var offset in offsets)
-            {
-                var lowPos = transform.position + offset + new Vector3(0, 0.02f, 0);
-                var uppPos = transform.position + offset + new Vector3(0, stepHeight, 0);
-                if (Physics.Raycast(lowPos, movF.normalized, out RaycastHit hitLower, stepDis))
+                Vector3[] offsets = new Vector3[] 
                 {
-                    float hitAngle = Vector3.Angle(hitLower.normal, Vector3.up);
-                    if (hitAngle < stepAngle)
-                        continue;
-
-                    // 上のRayが何も遮るものがないか判定
-                    if (!Physics.Raycast(uppPos, movF.normalized, stepDis))
+                    -sideDir * stepWidth,
+                    Vector3.zero,
+                    sideDir * stepWidth
+                };
+                foreach (var offset in offsets)
+                {
+                    var lowPos = transform.position + offset + new Vector3(0, 0.02f, 0);
+                    var uppPos = transform.position + offset + new Vector3(0, stepHeight, 0);
+                    if (Physics.Raycast(lowPos, movF.normalized, out RaycastHit hitLower, stepDis))
                     {
-                        // リジッドボディの位置をスムーズに上に持ち上げる
-                        // ※物理演算の衝突判定を壊さないよう、rb.positionを変更する
-                        rb.position += new Vector3(0, stepSmooth * Time.deltaTime, 0);
-                        break;
+                        float hitAngle = Vector3.Angle(hitLower.normal, Vector3.up);
+                        if (hitAngle < stepAngle)
+                            continue;
+
+                        if (!Physics.Raycast(uppPos, movF.normalized, stepDis))
+                        {
+                            rb.position += new Vector3(0, stepSmooth * Time.deltaTime, 0);
+                            break;
+                        }
                     }
                 }
             }
-
         }
 
         var velocityXZ = rb.linearVelocity;
@@ -93,8 +108,49 @@ public class Player : MonoBehaviour
         {
             var jumpVec = new Vector3(0, jumpSpeed, 0);
             rb.AddForce(jumpVec, ForceMode.VelocityChange);
+            isGlounded = false;
         }
 
+        if (input.actions["Attack"].WasPressedThisFrame())
+        {
+            bool set = false;
+            foreach(var o in fire)
+            {
+                if (!o.activeSelf)
+                {
+                    o.SetActive(true);
+                    Fire(o);
+                    set = true;
+                    break;
+                }
+            }
+            if (!set)
+            {
+                fire.Add(Instantiate(pre_Fire));
+                Fire(fire.Last());
+            }
+        }
+
+        if (0 < invincibleTime)
+        {
+            invincibleTime -= Time.deltaTime;
+            if (invincibleTime <= 0) invincibleTime = 0;
+        }
+    }
+
+    /// <summary>
+    /// 炎を飛ばす
+    /// </summary>
+    /// <param name="fire"></param>
+    void Fire(GameObject fire)
+    {
+        var location = transform.position + transform.TransformVector(fireOffset);
+        fire.transform.position = location;
+        fire.transform.rotation = transform.rotation;
+        if(fire.TryGetComponent<Rigidbody>(out var frb))
+        {
+            frb.linearVelocity = transform.forward * fireSpeed;
+        }
     }
 
     private void FixedUpdate()
@@ -103,7 +159,7 @@ public class Player : MonoBehaviour
         {
             if (isGravity)
             {
-
+                rb.AddForce(Vector3.down * 3f, ForceMode.Impulse);
             }
         }
 
@@ -118,6 +174,26 @@ public class Player : MonoBehaviour
             {
                 isGlounded = true;
             }
+        }
+
+        if (collision.gameObject.TryGetComponent<AttackObj>(out var attackObj))
+        {
+            if (invincibleTime <= 0)
+            {
+                hp -= attackObj.power;
+                if (hp <= 0)
+                {
+                    gameObject.SetActive(false);
+                }
+                invincibleTime = invincibleTimeMax;
+
+            }
+
+            //ノックバック
+            var dir = transform.position - collision.transform.position;
+            dir.y = 0;
+            var knockbackVec = dir.normalized * knockBackPower;
+            rb.AddForce(knockbackVec, ForceMode.Impulse);
         }
     }
 }
