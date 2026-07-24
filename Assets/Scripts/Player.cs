@@ -1,5 +1,9 @@
+using Cysharp.Threading.Tasks;
+using R3;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -33,23 +37,27 @@ public class Player : MonoBehaviour
     [SerializeField] float stepAngle;
 
     bool isGlounded;
-    bool isGravity;
+    bool isAttack;
+
+    public ReactiveProperty<int> getCoin { get; private set; } = new(0);
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
+        //カーソルを画面内から出なくする
+        Cursor.lockState = CursorLockMode.Confined;
+
         input = GetComponent<PlayerInput>();
         input.camera = FindAnyObjectByType<MyCamera>().gameObject.GetComponent<Camera>();
         rb = GetComponent<Rigidbody>();
         anim = GetComponentInChildren<Animator>();
-
-        isGravity = !true;
 
         for(int i=0; i < 5; i++)
         {
             fire.Add(Instantiate(pre_Fire));
             fire.Last().SetActive(false);
         }
+        isAttack = false;
     }
 
     // Update is called once per frame
@@ -59,10 +67,9 @@ public class Player : MonoBehaviour
         var camF = Vector3.Scale(input.camera.transform.forward, new Vector3(1, 0, 1)).normalized;
         var movF = camF * moveVec.y + input.camera.transform.right * moveVec.x;
 
-        if (isGlounded)
-            rb.AddForce(movF * moveSpeed, ForceMode.Acceleration);
-        
-        if(moveVec != Vector2.zero)
+        rb.AddForce(movF * moveSpeed, ForceMode.Acceleration);
+
+        if (moveVec != Vector2.zero)
         {
             //回転
             rb.rotation = Quaternion.RotateTowards(
@@ -74,7 +81,7 @@ public class Player : MonoBehaviour
             {
                 var sideDir = Vector3.Cross(Vector3.up, movF).normalized;
 
-                Vector3[] offsets = new Vector3[] 
+                Vector3[] offsets = new Vector3[]
                 {
                     -sideDir * stepWidth,
                     Vector3.zero,
@@ -93,6 +100,7 @@ public class Player : MonoBehaviour
                         if (!Physics.Raycast(uppPos, movF.normalized, stepDis))
                         {
                             rb.position += new Vector3(0, stepSmooth * Time.deltaTime, 0);
+                            isGlounded = true;
                             break;
                         }
                     }
@@ -105,31 +113,10 @@ public class Player : MonoBehaviour
         anim.SetFloat("MoveSpeed", velocityXZ.magnitude);
 
         if (input.actions["Jump"].WasPressedThisFrame() && isGlounded)
-        {
-            var jumpVec = new Vector3(0, jumpSpeed, 0);
-            rb.AddForce(jumpVec, ForceMode.VelocityChange);
-            isGlounded = false;
-        }
+            Jump(movF).Forget();
 
-        if (input.actions["Attack"].WasPressedThisFrame())
-        {
-            bool set = false;
-            foreach(var o in fire)
-            {
-                if (!o.activeSelf)
-                {
-                    o.SetActive(true);
-                    Fire(o);
-                    set = true;
-                    break;
-                }
-            }
-            if (!set)
-            {
-                fire.Add(Instantiate(pre_Fire));
-                Fire(fire.Last());
-            }
-        }
+        if (!isAttack && input.actions["Attack"].WasPressedThisFrame())
+            Attack().Forget();
 
         if (0 < invincibleTime)
         {
@@ -138,29 +125,15 @@ public class Player : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// 炎を飛ばす
-    /// </summary>
-    /// <param name="fire"></param>
-    void Fire(GameObject fire)
-    {
-        var location = transform.position + transform.TransformVector(fireOffset);
-        fire.transform.position = location;
-        fire.transform.rotation = transform.rotation;
-        if(fire.TryGetComponent<Rigidbody>(out var frb))
-        {
-            frb.linearVelocity = transform.forward * fireSpeed;
-        }
-    }
 
     private void FixedUpdate()
     {
         if (!isGlounded)
         {
-            if (isGravity)
-            {
-                rb.AddForce(Vector3.down * 3f, ForceMode.Impulse);
-            }
+            if (rb.useGravity)
+                rb.AddForce(Vector3.down * 2f, ForceMode.Impulse);
+            else
+                rb.AddForce(Vector3.down * 0.5f, ForceMode.Impulse);
         }
 
         isGlounded = false;
@@ -183,7 +156,7 @@ public class Player : MonoBehaviour
                 hp -= attackObj.power;
                 if (hp <= 0)
                 {
-                    gameObject.SetActive(false);
+                    Death().Forget();
                 }
                 invincibleTime = invincibleTimeMax;
 
@@ -195,5 +168,72 @@ public class Player : MonoBehaviour
             var knockbackVec = dir.normalized * knockBackPower;
             rb.AddForce(knockbackVec, ForceMode.Impulse);
         }
+
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        if (other.gameObject.CompareTag("Coin"))
+        {
+            getCoin.Value++;
+            other.gameObject.SetActive(false);
+        }
+    }
+
+    async UniTask Jump(Vector3 movF )
+    {
+        var jumpVec = new Vector3(0, jumpSpeed, 0);
+        rb.AddForce(jumpVec + movF * (moveSpeed * 0.5f), ForceMode.Impulse);
+        rb.useGravity = false;
+        await UniTask.Delay(500);
+        rb.useGravity = true;
+    }
+
+    async UniTask Attack()
+    {
+        isAttack = true;
+
+        bool set = false;
+        foreach (var o in fire)
+        {
+            if (!o.activeSelf)
+            {
+                o.SetActive(true);
+                Fire(o);
+                set = true;
+                break;
+            }
+        }
+        if (!set)
+        {
+            fire.Add(Instantiate(pre_Fire));
+            Fire(fire.Last());
+        }
+        await UniTask.Delay(1000);
+        isAttack = false;
+    }
+    /// <summary>
+    /// 炎を飛ばす
+    /// </summary>
+    /// <param name="fire"></param>
+    void Fire(GameObject fire)
+    {
+        var location = transform.position + transform.TransformVector(fireOffset);
+        fire.transform.position = location;
+
+        var camF = Vector3.Scale(input.camera.transform.forward, new Vector3(1, 0, 1)).normalized;
+
+        fire.transform.rotation = Quaternion.LookRotation(camF);
+        if (fire.TryGetComponent<Rigidbody>(out var frb))
+        {
+            frb.linearVelocity = camF * fireSpeed;
+        }
+    }
+
+    async UniTask Death()
+    {
+        gameObject.SetActive(false);
+        await UniTask.Delay(100);
+        Debug.Log("death");
     }
 }
