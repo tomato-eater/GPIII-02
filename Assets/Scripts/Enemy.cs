@@ -80,12 +80,35 @@ public class Enemy : MonoBehaviour
 
         if (Physics.SphereCast(transform.position + new Vector3(0, 0.9f, 0), 0.5f, Vector3.down, out var hit, 0.1f)) 
         {
-            Debug.Log(hit.collider.gameObject.name);
+
         }
         else
         {
             rb.AddForce(Vector3.down * 3f, ForceMode.Acceleration);
         }
         
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        if(other.gameObject.TryGetComponent<AttackObj>(out var attackObj))
+        {
+            if (invincibleTime <= 0)
+            {
+                hp -= attackObj.power;
+                if (hp <= 0)
+                {
+                    gameObject.SetActive(false);
+                }
+                invincibleTime = invincibleTimeMax;
+
+            }
+
+            //ノックバック
+            var dir = transform.position - other.transform.position;
+            dir.y = 0;
+            var knockbackVec = dir.normalized * knockBackPower;
+            rb.linearVelocity = knockbackVec;
+        }
     }
 }

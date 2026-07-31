@@ -40,10 +40,13 @@ public class Player : MonoBehaviour
     bool isAttack;
 
     public ReactiveProperty<int> getCoin { get; private set; } = new(0);
+    public ReactiveProperty<int> HP { get; private set; } = new(0);
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
+    void Awake()
     {
+        HP.Value = hp;
+
         //カーソルを画面内から出なくする
         Cursor.lockState = CursorLockMode.Confined;
 
@@ -63,13 +66,15 @@ public class Player : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        if (!rb.useGravity) return;
         var moveVec = input.actions["Move"].ReadValue<Vector2>();
         var camF = Vector3.Scale(input.camera.transform.forward, new Vector3(1, 0, 1)).normalized;
         var movF = camF * moveVec.y + input.camera.transform.right * moveVec.x;
 
-        rb.AddForce(movF * moveSpeed, ForceMode.Acceleration);
+        if (!isAttack)
+            rb.AddForce(movF * moveSpeed, ForceMode.Acceleration);
 
-        if (moveVec != Vector2.zero)
+        if (moveVec != Vector2.zero && !isAttack)
         {
             //回転
             rb.rotation = Quaternion.RotateTowards(
@@ -78,31 +83,29 @@ public class Player : MonoBehaviour
                 360 * roteSpeed * Time.deltaTime);
 
             //段差
+            var sideDir = Vector3.Cross(Vector3.up, movF).normalized;
+
+            Vector3[] offsets = new Vector3[]
             {
-                var sideDir = Vector3.Cross(Vector3.up, movF).normalized;
+                -sideDir * stepWidth,
+                Vector3.zero,
+                sideDir * stepWidth
+            };
+            foreach (var offset in offsets) 
+            {
+                var lowPos = transform.position + offset + new Vector3(0, 0.02f, 0);
+                var uppPos = transform.position + offset + new Vector3(0, stepHeight, 0);
+                if (Physics.Raycast(lowPos, movF.normalized, out RaycastHit hitLower, stepDis)) 
+                {
+                    float hitAngle = Vector3.Angle(hitLower.normal, Vector3.up);
+                    if (hitAngle < stepAngle)
+                        continue;
 
-                Vector3[] offsets = new Vector3[]
-                {
-                    -sideDir * stepWidth,
-                    Vector3.zero,
-                    sideDir * stepWidth
-                };
-                foreach (var offset in offsets)
-                {
-                    var lowPos = transform.position + offset + new Vector3(0, 0.02f, 0);
-                    var uppPos = transform.position + offset + new Vector3(0, stepHeight, 0);
-                    if (Physics.Raycast(lowPos, movF.normalized, out RaycastHit hitLower, stepDis))
+                    if (!Physics.Raycast(uppPos, movF.normalized, stepDis)) 
                     {
-                        float hitAngle = Vector3.Angle(hitLower.normal, Vector3.up);
-                        if (hitAngle < stepAngle)
-                            continue;
-
-                        if (!Physics.Raycast(uppPos, movF.normalized, stepDis))
-                        {
-                            rb.position += new Vector3(0, stepSmooth * Time.deltaTime, 0);
-                            isGlounded = true;
-                            break;
-                        }
+                        rb.position += new Vector3(0, stepSmooth * Time.deltaTime, 0);
+                        isGlounded = true;
+                        break;
                     }
                 }
             }
@@ -153,8 +156,8 @@ public class Player : MonoBehaviour
         {
             if (invincibleTime <= 0)
             {
-                hp -= attackObj.power;
-                if (hp <= 0)
+                HP.Value -= attackObj.power;
+                if (HP.Value <= 0)
                 {
                     Death().Forget();
                 }
@@ -192,9 +195,10 @@ public class Player : MonoBehaviour
     async UniTask Attack()
     {
         isAttack = true;
-
+        anim.Play("Attack");
+        /*
         bool set = false;
-        foreach (var o in fire)
+         foreach (var o in fire)
         {
             if (!o.activeSelf)
             {
@@ -209,6 +213,8 @@ public class Player : MonoBehaviour
             fire.Add(Instantiate(pre_Fire));
             Fire(fire.Last());
         }
+         */
+
         await UniTask.Delay(1000);
         isAttack = false;
     }
@@ -216,6 +222,7 @@ public class Player : MonoBehaviour
     /// 炎を飛ばす
     /// </summary>
     /// <param name="fire"></param>
+    /*
     void Fire(GameObject fire)
     {
         var location = transform.position + transform.TransformVector(fireOffset);
@@ -229,11 +236,16 @@ public class Player : MonoBehaviour
             frb.linearVelocity = camF * fireSpeed;
         }
     }
+    */
 
     async UniTask Death()
     {
-        gameObject.SetActive(false);
+        anim.Play("Death");
+        rb.useGravity = false;
+        rb.constraints = RigidbodyConstraints.FreezePosition;
+        GetComponent<CapsuleCollider>().enabled = false;
         await UniTask.Delay(100);
-        Debug.Log("death");
+        var ui = FindAnyObjectByType<UI>();
+        ui.Death();
     }
 }
