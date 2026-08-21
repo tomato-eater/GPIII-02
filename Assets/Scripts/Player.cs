@@ -1,10 +1,5 @@
 using Cysharp.Threading.Tasks;
 using R3;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -14,9 +9,9 @@ public class Player : MonoBehaviour
     Rigidbody rb;
     Animator anim;
     [SerializeField] int hp;
-    [SerializeField] float invincibleTimeMax = 0.5f;
+    [SerializeField] float invincibleTimeMax;
     float invincibleTime;
-    [SerializeField] float knockBackPower = 5;
+    [SerializeField] float knockBackPower;
 
     [SerializeField] float moveSpeed;
     [SerializeField] float roteSpeed;
@@ -25,7 +20,7 @@ public class Player : MonoBehaviour
     [SerializeField] float gDamping;
     [SerializeField] float airDamping;
     [SerializeField] GameObject pre_Fire;
-    List<GameObject> fire = new List<GameObject>();
+    //List<GameObject> fire = new List<GameObject>();
     [SerializeField] Vector3 fireOffset;
     [SerializeField] float fireSpeed;
 
@@ -36,8 +31,9 @@ public class Player : MonoBehaviour
     [SerializeField] float stepSmooth;
     [SerializeField] float stepAngle;
 
-    bool isGlounded;
+    bool isGrounded;
     bool isAttack;
+    bool isJump;
 
     public ReactiveProperty<int> getCoin { get; private set; } = new(0);
     public ReactiveProperty<int> HP { get; private set; } = new(0);
@@ -55,57 +51,60 @@ public class Player : MonoBehaviour
         rb = GetComponent<Rigidbody>();
         anim = GetComponentInChildren<Animator>();
 
-        for(int i=0; i < 5; i++)
-        {
-            fire.Add(Instantiate(pre_Fire));
-            fire.Last().SetActive(false);
-        }
+        //for(int i=0; i < 5; i++)
+        //{
+        //    fire.Add(Instantiate(pre_Fire));
+        //    fire.Last().SetActive(false);
+        //}
         isAttack = false;
+        isJump = false;
     }
 
     // Update is called once per frame
     void Update()
     {
-        if (!rb.useGravity) return;
+        if (!rb.useGravity && !isJump) return;
         var moveVec = input.actions["Move"].ReadValue<Vector2>();
         var camF = Vector3.Scale(input.camera.transform.forward, new Vector3(1, 0, 1)).normalized;
         var movF = camF * moveVec.y + input.camera.transform.right * moveVec.x;
 
         if (!isAttack)
+        {
             rb.AddForce(movF * moveSpeed, ForceMode.Acceleration);
 
-        if (moveVec != Vector2.zero && !isAttack)
-        {
-            //回転
-            rb.rotation = Quaternion.RotateTowards(
-                rb.rotation,
-                Quaternion.LookRotation(movF.normalized),
-                360 * roteSpeed * Time.deltaTime);
-
-            //段差
-            var sideDir = Vector3.Cross(Vector3.up, movF).normalized;
-
-            Vector3[] offsets = new Vector3[]
+            if (moveVec != Vector2.zero)
             {
+                //回転
+                rb.rotation = Quaternion.RotateTowards(
+                    rb.rotation,
+                    Quaternion.LookRotation(movF.normalized),
+                    360 * roteSpeed * Time.deltaTime);
+
+                //段差
+                var sideDir = Vector3.Cross(Vector3.up, movF).normalized;
+
+                Vector3[] offsets = new Vector3[]
+                {
                 -sideDir * stepWidth,
                 Vector3.zero,
                 sideDir * stepWidth
-            };
-            foreach (var offset in offsets) 
-            {
-                var lowPos = transform.position + offset + new Vector3(0, 0.02f, 0);
-                var uppPos = transform.position + offset + new Vector3(0, stepHeight, 0);
-                if (Physics.Raycast(lowPos, movF.normalized, out RaycastHit hitLower, stepDis)) 
+                };
+                foreach (var offset in offsets)
                 {
-                    float hitAngle = Vector3.Angle(hitLower.normal, Vector3.up);
-                    if (hitAngle < stepAngle)
-                        continue;
-
-                    if (!Physics.Raycast(uppPos, movF.normalized, stepDis)) 
+                    var lowPos = transform.position + offset + new Vector3(0, 0.02f, 0);
+                    var uppPos = transform.position + offset + new Vector3(0, stepHeight, 0);
+                    if (Physics.Raycast(lowPos, movF.normalized, out RaycastHit hitLower, stepDis))
                     {
-                        rb.position += new Vector3(0, stepSmooth * Time.deltaTime, 0);
-                        isGlounded = true;
-                        break;
+                        float hitAngle = Vector3.Angle(hitLower.normal, Vector3.up);
+                        if (hitAngle < stepAngle)
+                            continue;
+
+                        if (!Physics.Raycast(uppPos, movF.normalized, stepDis))
+                        {
+                            rb.position += new Vector3(0, stepSmooth * Time.deltaTime, 0);
+                            isGrounded = true;
+                            break;
+                        }
                     }
                 }
             }
@@ -115,7 +114,7 @@ public class Player : MonoBehaviour
         velocityXZ.y = 0;
         anim.SetFloat("MoveSpeed", velocityXZ.magnitude);
 
-        if (input.actions["Jump"].WasPressedThisFrame() && isGlounded)
+        if (input.actions["Jump"].WasPressedThisFrame() && isGrounded && !isJump)
             Jump(movF).Forget();
 
         if (!isAttack && input.actions["Attack"].WasPressedThisFrame())
@@ -131,15 +130,15 @@ public class Player : MonoBehaviour
 
     private void FixedUpdate()
     {
-        if (!isGlounded)
+        if (!isGrounded)
         {
             if (rb.useGravity)
-                rb.AddForce(Vector3.down * 2f, ForceMode.Impulse);
+                rb.AddForce(Vector3.down * 1f, ForceMode.VelocityChange);
             else
-                rb.AddForce(Vector3.down * 0.5f, ForceMode.Impulse);
+                rb.AddForce(Vector3.down * 0.5f, ForceMode.VelocityChange);
         }
 
-        isGlounded = false;
+        isGrounded = false;
     }
 
     private void OnCollisionStay(Collision collision)
@@ -148,7 +147,7 @@ public class Player : MonoBehaviour
         {
             if (cont.normal.y >= gNormal)
             {
-                isGlounded = true;
+                isGrounded = true;
             }
         }
 
@@ -163,13 +162,12 @@ public class Player : MonoBehaviour
                 }
                 invincibleTime = invincibleTimeMax;
 
+                //ノックバック
+                var dir = transform.position - collision.transform.position;
+                dir.y = 0;
+                var knockbackVec = dir.normalized * knockBackPower;
+                rb.AddForce(knockbackVec, ForceMode.Impulse);
             }
-
-            //ノックバック
-            var dir = transform.position - collision.transform.position;
-            dir.y = 0;
-            var knockbackVec = dir.normalized * knockBackPower;
-            rb.AddForce(knockbackVec, ForceMode.Impulse);
         }
 
     }
@@ -188,7 +186,7 @@ public class Player : MonoBehaviour
         var jumpVec = new Vector3(0, jumpSpeed, 0);
         rb.AddForce(jumpVec + movF * (moveSpeed * 0.5f), ForceMode.Impulse);
         rb.useGravity = false;
-        await UniTask.Delay(500);
+        await UniTask.Delay(500, cancellationToken: this.GetCancellationTokenOnDestroy());
         rb.useGravity = true;
     }
 
@@ -215,7 +213,7 @@ public class Player : MonoBehaviour
         }
          */
 
-        await UniTask.Delay(1000);
+        await UniTask.Delay(1000, cancellationToken: this.GetCancellationTokenOnDestroy());
         isAttack = false;
     }
     /// <summary>
@@ -242,10 +240,16 @@ public class Player : MonoBehaviour
     {
         anim.Play("Death");
         rb.useGravity = false;
-        rb.constraints = RigidbodyConstraints.FreezePosition;
-        GetComponent<CapsuleCollider>().enabled = false;
-        await UniTask.Delay(100);
+        rb.constraints = RigidbodyConstraints.FreezeAll;
+        if (TryGetComponent<CapsuleCollider>(out var col))
+        {
+            col.enabled = false;
+        }
+        await UniTask.Delay(100, cancellationToken: this.GetCancellationTokenOnDestroy());
         var ui = FindAnyObjectByType<UI>();
-        ui.Death();
+        if(ui != null)
+        {
+            ui.Death();
+        }
     }
 }

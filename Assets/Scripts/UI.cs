@@ -49,6 +49,7 @@ public class UI : MonoBehaviour
         if(get == maxCoin)
         {
             resultText.text = "Game Clear";
+            resultText.color = Color.green;
             animator.SetBool("c", true);
         }
     }
@@ -56,6 +57,7 @@ public class UI : MonoBehaviour
     public void Death()
     {
         resultText.text = "Game Over";
+        resultText.color = Color.black;
         animator.SetBool("c", true);
     }
 

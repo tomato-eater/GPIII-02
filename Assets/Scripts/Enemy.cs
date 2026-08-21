@@ -5,13 +5,15 @@ public class Enemy : MonoBehaviour
     [SerializeField] float moveSpeed;
     [SerializeField] float roteSpeed;
     Rigidbody rb;
-    [SerializeField] int hp = 2;
-    [SerializeField] float invincibleTimeMax = 0.5f;
+    [SerializeField] int hp;
+    [SerializeField] float invincibleTimeMax;
     float invincibleTime;
-    [SerializeField] float knockBackPower = 5;
+    [SerializeField] float knockBackPower;
     
-
     public Collider playerColl {  get; set; }
+
+    bool isGlounded;
+    bool isGravity;
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
@@ -25,6 +27,8 @@ public class Enemy : MonoBehaviour
     {
         var forward = transform.forward;
         var dir = playerColl.bounds.center - rb.position;
+
+        isGravity = true;
         if (invincibleTime <= 0)
         {
             if (Physics.Raycast((rb.position + transform.up * 0.5f), dir.normalized, out var hitinfo))
@@ -34,7 +38,9 @@ public class Enemy : MonoBehaviour
                     dir.y = 0;
                     forward = dir.normalized;
                     rb.linearVelocity = forward * moveSpeed;
-                }
+
+
+                }                
             }
         }
 
@@ -53,8 +59,27 @@ public class Enemy : MonoBehaviour
         }
     }
 
+    private void FixedUpdate()
+    {
+        if (!isGlounded)
+        {
+            if (isGravity)
+                rb.AddForce(Vector3.down * 1f, ForceMode.VelocityChange);
+        }
+        isGlounded = false;
+    }
+
     private void OnCollisionStay(Collision collision)
     {
+        foreach (var cont in collision.contacts)
+        {
+            if (cont.normal.y >= 0.75f)
+            {
+                isGlounded = true;
+            }
+        }
+
+
         if (!collision.gameObject.CompareTag("Enemy"))
         {
             if (collision.gameObject.TryGetComponent<AttackObj>(out var attackObj))
@@ -77,16 +102,6 @@ public class Enemy : MonoBehaviour
                 rb.linearVelocity = knockbackVec;
             }
         }
-
-        if (Physics.SphereCast(transform.position + new Vector3(0, 0.9f, 0), 0.5f, Vector3.down, out var hit, 0.1f)) 
-        {
-
-        }
-        else
-        {
-            rb.AddForce(Vector3.down * 3f, ForceMode.Acceleration);
-        }
-        
     }
 
     private void OnTriggerEnter(Collider other)
@@ -102,13 +117,13 @@ public class Enemy : MonoBehaviour
                 }
                 invincibleTime = invincibleTimeMax;
 
+                //ノックバック
+                var dir = transform.position - other.transform.position;
+                dir.y = 0;
+                var knockbackVec = dir.normalized * knockBackPower;
+                rb.linearVelocity = knockbackVec;
             }
-
-            //ノックバック
-            var dir = transform.position - other.transform.position;
-            dir.y = 0;
-            var knockbackVec = dir.normalized * knockBackPower;
-            rb.linearVelocity = knockbackVec;
+                      
         }
     }
 }
